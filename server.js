@@ -18,24 +18,23 @@ const MAILGUN_TO = process.env.MAILGUN_TO;
 const app = Express();
 app.set('view engine', 'ejs');
 app.use(BodyParser.urlencoded({extended: false}));
+app.use(Express.static('public'));
 
 app.get('/', function (req, res) {
     const remoteIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
-    console.log(remoteIp + ' GET /');
+    console.log(remoteIp + ' [http] GET /');
 
     //render the index.jade file - input forms for humans
     res.render('index', function (err, html) {
         if (err) {
-            // log any error to the console for debug
-            console.log(err);
-        }
-        else {
-            //no error, so send the html to the browser
+            console.log(remoteIp + ' [http] ERROR ' + err);
+        } else {
             res.send(html);
         }
     });
 });
+
 
 app.post('/', function (req, res) {
     const remoteIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
@@ -47,9 +46,7 @@ app.post('/', function (req, res) {
 
     recaptcha.validateRequest(req, remoteIp)
         .then(function () {
-
             const mailgun = new Mailgun({apiKey: MAILGUN_API_KEY, domain: MAILGUN_DOMAIN});
-
             const data = {
                 from: MAILGUN_FROM,
                 to: MAILGUN_TO,
@@ -59,19 +56,39 @@ app.post('/', function (req, res) {
 
             mailgun.messages().send(data, function (error, body) {
                 if (error) {
-                    console.log(remoteIp + ' ERROR ' + error);
-                    res.send('An error occurred, please try again later');
+                    console.log(remoteIp + ' [mailgun] ERROR ' + error);
+                    renderError(remoteIp, res);
                 } else {
-                    console.log(remoteIp + ' OK');
-                    res.send('Request sent: ' + req.body['for']);
+                    console.log(remoteIp + ' [http] OK');
+                    renderSuccess(remoteIp, res);
                 }
             });
         })
         .catch(function (errorCodes) {
-            console.log(remoteIp + ' ERROR ' + errorCodes);
-            res.send('An error occurred, please try again later');
+            console.log(remoteIp + ' [recapthca] ERROR ' + errorCodes);
+            renderError(remoteIp, res);
         });
 });
+
+function renderError(remoteIp, res) {
+    res.render('error', function (err, html) {
+        if (err) {
+            console.log(remoteIp + ' [http] ERROR ' + err);
+        } else {
+            res.send(html);
+        }
+    });
+}
+
+function renderSuccess(remoteIp, res) {
+    res.render('success', function (err, html) {
+        if (err) {
+            console.log(remoteIp + ' [http] ERROR ' + err);
+        } else {
+            res.send(html);
+        }
+    });
+}
 
 app.listen(PORT, HOST);
 console.log(`Running on http://${HOST}:${PORT}`);
